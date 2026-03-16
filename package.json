@@ -1,0 +1,14 @@
+{
+  "name": "tutory-backend",
+  "version": "1.0.0",
+  "description": "Tutory Marketing Intelligence Backend",
+  "main": "index.js",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.20.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
