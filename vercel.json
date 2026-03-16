@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/meta-ads",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/diagnostico",
+      "schedule": "30 11 * * *"
+    }
+  ]
+}
