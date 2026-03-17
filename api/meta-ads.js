@@ -3,19 +3,15 @@ import { supabase } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   try {
-    const hoje = new Date();
-    const ontem = new Date(hoje);
-    ontem.setDate(ontem.getDate() - 1);
+    const ontem = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    // Suporta ?desde=2026-01-01&ate=2026-03-17 para reprocessar períodos
-    const desde = req.query?.desde || req.query?.data || ontem.toISOString().split('T')[0];
-    const ate   = req.query?.ate   || req.query?.data || ontem.toISOString().split('T')[0];
+    const desde = req.query?.desde || req.query?.data || ontem;
+    const ate   = req.query?.ate   || req.query?.data || ontem;
 
     const TOKEN      = process.env.META_TOKEN;
     const AD_ACCOUNT = process.env.META_AD_ACCOUNT;
     const BASE       = 'https://graph.facebook.com/v19.0';
 
-    // level=campaign — sem duplicação de gasto
     const fields = [
       'campaign_name',
       'impressions',
@@ -23,19 +19,20 @@ export default async function handler(req, res) {
       'ctr',
       'cpc',
       'spend',
-      'actions'
+      'actions',
+      'date_start'
     ].join(',');
 
-    let url = `${BASE}/${AD_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${desde}","until":"${ate}"}&level=campaign&time_increment=1&access_token=${TOKEN}&limit=500`;
+    const url = `${BASE}/${AD_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${desde}","until":"${ate}"}&level=campaign&time_increment=1&access_token=${TOKEN}&limit=500`;
 
-    // Coleta todas as páginas
     let campanhas = [];
-    while (url) {
-      const response = await fetch(url);
+    let nextUrl = url;
+    while (nextUrl) {
+      const response = await fetch(nextUrl);
       const data = await response.json();
       if (data.error) throw new Error(data.error.message);
       campanhas = campanhas.concat(data.data || []);
-      url = data.paging?.next || null;
+      nextUrl = data.paging?.next || null;
     }
 
     let salvos = { mentoria: 0, hub: 0, experience: 0, ignorados: 0 };
@@ -48,14 +45,12 @@ export default async function handler(req, res) {
       const vendas = extrairVendas(c.actions);
       const gasto  = parseFloat(c.spend || 0);
       const cpl    = leads > 0 ? gasto / leads : 0;
-
-      // data_inicio vem do campo date_start quando time_increment=1
       const dataRegistro = c.date_start || desde;
 
       const registro = {
         data:          dataRegistro,
         campanha_nome: c.campaign_name,
-        conjunto_nome: null,   // nível campanha não tem adset
+        conjunto_nome: null,
         anuncio_nome:  null,
         impressoes:    parseInt(c.impressions || 0),
         cliques:       parseInt(c.clicks || 0),
@@ -64,22 +59,21 @@ export default async function handler(req, res) {
         gasto
       };
 
-      // Upsert por (data + campanha_nome) — evita duplicar ao rodar 2x
       if (plataforma === 'mentoria') {
         await supabase.from('campanhas_mentoria')
           .upsert({ ...registro, leads, cpl },
-                  { onConflict: 'data,campanha_nome', ignoreDuplicates: false });
+                  { onConflict: 'data,campanha_nome' });
         salvos.mentoria++;
       } else if (plataforma === 'hub') {
         await supabase.from('campanhas_hub')
           .upsert({ ...registro, leads, cpl },
-                  { onConflict: 'data,campanha_nome', ignoreDuplicates: false });
+                  { onConflict: 'data,campanha_nome' });
         salvos.hub++;
       } else if (plataforma === 'experience') {
         const custo_por_compra = vendas > 0 ? gasto / vendas : 0;
         await supabase.from('campanhas_experience')
           .upsert({ ...registro, vendas, custo_por_compra },
-                  { onConflict: 'data,campanha_nome', ignoreDuplicates: false });
+                  { onConflict: 'data,campanha_nome' });
         salvos.experience++;
       }
     }
