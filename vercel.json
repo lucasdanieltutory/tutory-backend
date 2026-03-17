@@ -5,6 +5,23 @@
       "maxDuration": 30
     }
   },
+  "routes": [
+    {
+      "src": "/api/meta-ads",
+      "methods": ["GET", "POST"],
+      "dest": "/api/meta-ads.js"
+    },
+    {
+      "src": "/api/diagnostico",
+      "methods": ["GET", "POST"],
+      "dest": "/api/diagnostico.js"
+    },
+    {
+      "src": "/api/webhook-clint",
+      "methods": ["POST"],
+      "dest": "/api/webhook-clint.js"
+    }
+  ],
   "crons": [
     {
       "path": "/api/meta-ads",
