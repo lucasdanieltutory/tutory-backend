@@ -19,8 +19,3 @@
     }
   ]
 }
-```
-
-Commit → aguarda deploy → testa a URL:
-```
-https://tutorial-backend.vercel.app/api/historico?desde=2026-01-01&ate=2026-03-16&lote=0
