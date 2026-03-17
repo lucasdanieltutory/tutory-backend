@@ -2,11 +2,14 @@ import { detectarPlataforma, extrairLeads, extrairVendas } from '../lib/meta.js'
 import { supabase } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
+  // Aceita GET e POST
   try {
     const hoje = new Date();
     const ontem = new Date(hoje);
     ontem.setDate(ontem.getDate() - 1);
-    const dataStr = ontem.toISOString().split('T')[0];
+    
+    // Permite passar data manual via query string ex: ?data=2026-03-16
+    const dataStr = req.query?.data || ontem.toISOString().split('T')[0];
 
     const TOKEN = process.env.META_TOKEN;
     const AD_ACCOUNT = process.env.META_AD_ACCOUNT;
@@ -65,18 +68,18 @@ export default async function handler(req, res) {
         salvos.hub++;
       } else if (plataforma === 'experience') {
         const custo_por_compra = vendas > 0 ? gasto / vendas : 0;
-        await supabase.from('campanhas_experience').insert({ 
-          ...registro, vendas, custo_por_compra 
+        await supabase.from('campanhas_experience').insert({
+          ...registro, vendas, custo_por_compra
         });
         salvos.experience++;
       }
     }
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       total: anuncios.length,
       salvos,
-      data: dataStr 
+      data: dataStr
     });
   } catch (err) {
     console.error('Erro meta-ads:', err);
