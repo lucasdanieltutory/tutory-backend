@@ -2,15 +2,12 @@ import { detectarPlataforma, extrairLeads, extrairVendas } from '../lib/meta.js'
 import { supabase } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
-  // Aceita GET e POST
   try {
     const hoje = new Date();
     const ontem = new Date(hoje);
     ontem.setDate(ontem.getDate() - 1);
     
-    // Permite passar data manual via query string ex: ?data=2026-03-16
     const dataStr = req.query?.data || ontem.toISOString().split('T')[0];
-
     const TOKEN = process.env.META_TOKEN;
     const AD_ACCOUNT = process.env.META_AD_ACCOUNT;
     const BASE = 'https://graph.facebook.com/v19.0';
@@ -24,9 +21,7 @@ export default async function handler(req, res) {
       'ctr',
       'cpc',
       'spend',
-      'actions',
-      'cost_per_action_type',
-      'creative{thumbnail_url}'
+      'actions'
     ].join(',');
 
     const url = `${BASE}/${AD_ACCOUNT}/insights?fields=${fields}&time_range={"since":"${dataStr}","until":"${dataStr}"}&level=ad&access_token=${TOKEN}&limit=500`;
@@ -45,7 +40,6 @@ export default async function handler(req, res) {
       const vendas = extrairVendas(c.actions);
       const gasto = parseFloat(c.spend || 0);
       const cpl = leads > 0 ? gasto / leads : 0;
-      const thumbnail_url = c.creative?.thumbnail_url || null;
 
       const registro = {
         data: dataStr,
@@ -56,8 +50,7 @@ export default async function handler(req, res) {
         cliques: parseInt(c.clicks || 0),
         ctr: parseFloat(c.ctr || 0),
         cpc: parseFloat(c.cpc || 0),
-        gasto,
-        thumbnail_url
+        gasto
       };
 
       if (plataforma === 'mentoria') {
