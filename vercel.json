@@ -6,21 +6,11 @@
     }
   },
   "crons": [
-    {
-      "path": "/api/meta-ads",
-      "schedule": "0 11 * * *"
-    },
-    {
-      "path": "/api/diagnostico",
-      "schedule": "30 11 * * *"
-    },
-    {
-      "path": "/api/meta-ads?desde=2026-03-12&ate=2026-03-13",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/meta-ads?desde=2026-03-14&ate=2026-03-15",
-      "schedule": "5 12 * * *"
-    }
+    {"path": "/api/meta-ads", "schedule": "0 11 * * *"},
+    {"path": "/api/diagnostico", "schedule": "30 11 * * *"},
+    {"path": "/api/meta-ads?desde=2026-03-12&ate=2026-03-12", "schedule": "0 12 * * *"},
+    {"path": "/api/meta-ads?desde=2026-03-13&ate=2026-03-13", "schedule": "2 12 * * *"},
+    {"path": "/api/meta-ads?desde=2026-03-14&ate=2026-03-14", "schedule": "4 12 * * *"},
+    {"path": "/api/meta-ads?desde=2026-03-15&ate=2026-03-15", "schedule": "6 12 * * *"}
   ]
 }
