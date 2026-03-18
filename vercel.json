@@ -15,11 +15,11 @@
       "schedule": "30 11 * * *"
     },
     {
-      "path": "/api/meta-ads?desde=2026-03-09&ate=2026-03-11",
+      "path": "/api/meta-ads?desde=2026-03-12&ate=2026-03-13",
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/meta-ads?desde=2026-03-12&ate=2026-03-15",
+      "path": "/api/meta-ads?desde=2026-03-14&ate=2026-03-15",
       "schedule": "5 12 * * *"
     }
   ]
