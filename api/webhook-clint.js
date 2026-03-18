@@ -4,10 +4,11 @@ import { supabase } from '../lib/supabase.js';
 function detectarCanal(tag) {
   if (!tag) return 'Orgânico';
   const t = tag.toLowerCase();
-  if (t.includes('lp 1 site') || t.includes('lp1')) return 'Landing Page';
+  if (t.includes('lp 1 site')) return 'Landing Page';
   if (t.includes('formulárioresp') || t.includes('formularioresp')) return 'Respondi';
-  if (t.includes('instagram') || t.includes('tráfeg') || t.includes('trafeg')) return 'Typebot';
-  if (t.includes('site')) return 'Site Oficial';
+  if (t.includes('tráfeg') || t.includes('trafeg')) return 'Typebot';
+  if (t.includes('instagram')) return 'Orgânico';
+  if (t.includes('site')) return 'Site';
   return 'Orgânico';
 }
 
