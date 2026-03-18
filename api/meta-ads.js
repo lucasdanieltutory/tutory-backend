@@ -1,6 +1,21 @@
 import { detectarPlataforma, extrairLeads, extrairVendas } from '../lib/meta.js';
 import { supabase } from '../lib/supabase.js';
 
+async function salvar(tabela, registros) {
+  if (registros.length === 0) return;
+  // Deleta os registros existentes para o período e insere novamente
+  const datas = [...new Set(registros.map(r => r.data))];
+  for (const data of datas) {
+    await supabase.from(tabela).delete().eq('data', data);
+  }
+  // Insere em lotes de 50
+  for (let i = 0; i < registros.length; i += 50) {
+    const lote = registros.slice(i, i + 50);
+    const { error } = await supabase.from(tabela).insert(lote);
+    if (error) console.error(`Erro ao inserir em ${tabela}:`, error.message);
+  }
+}
+
 export default async function handler(req, res) {
   try {
     const TOKEN      = process.env.META_TOKEN;
@@ -8,9 +23,8 @@ export default async function handler(req, res) {
     const BASE       = 'https://graph.facebook.com/v19.0';
 
     const mes  = req.body?.mes  || req.query?.mes;
-    const modo = req.body?.modo || req.query?.modo || 'completo'; // completo ou campanhas
-
     let desde, ate;
+
     if (mes) {
       const m = parseInt(mes);
       desde = `2026-${String(m).padStart(2,'0')}-01`;
@@ -22,9 +36,10 @@ export default async function handler(req, res) {
         ate = ontem.toISOString().split('T')[0];
       }
     } else {
+      // Suporta desde/ate direto
       const ontem = new Date(Date.now()-86400000);
-      desde = ontem.toISOString().split('T')[0];
-      ate   = desde;
+      desde = req.query?.desde || ontem.toISOString().split('T')[0];
+      ate   = req.query?.ate   || req.query?.desde || ontem.toISOString().split('T')[0];
     }
 
     const fields = 'campaign_name,impressions,clicks,ctr,cpc,spend,actions,date_start';
@@ -40,11 +55,11 @@ export default async function handler(req, res) {
       nextUrl = d.paging?.next || null;
     }
 
-    let salvos = { mentoria:0, hub:0, experience:0, ignorados:0 };
+    const mn = [], hb = [], ex = [];
 
     for (const c of campanhas) {
       const plataforma = detectarPlataforma(c.campaign_name);
-      if (plataforma === 'desconhecido') { salvos.ignorados++; continue; }
+      if (plataforma === 'desconhecido') continue;
       const leads = extrairLeads(c.actions);
       const vendas = extrairVendas(c.actions);
       const gasto = parseFloat(c.spend || 0);
@@ -58,20 +73,17 @@ export default async function handler(req, res) {
         cpc: parseFloat(c.cpc || 0),
         gasto
       };
-      if (plataforma === 'mentoria') {
-        await supabase.from('campanhas_mentoria').upsert({ ...reg, leads, cpl: leads>0?gasto/leads:0 }, { onConflict: 'data,campanha_nome' });
-        salvos.mentoria++;
-      } else if (plataforma === 'hub') {
-        await supabase.from('campanhas_hub').upsert({ ...reg, leads, cpl: leads>0?gasto/leads:0 }, { onConflict: 'data,campanha_nome' });
-        salvos.hub++;
-      } else if (plataforma === 'experience') {
-        await supabase.from('campanhas_experience').upsert({ ...reg, vendas, custo_por_compra: vendas>0?gasto/vendas:0 }, { onConflict: 'data,campanha_nome' });
-        salvos.experience++;
-      }
+      if (plataforma === 'mentoria') mn.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
+      else if (plataforma === 'hub') hb.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
+      else if (plataforma === 'experience') ex.push({ ...reg, vendas, custo_por_compra: vendas>0?gasto/vendas:0 });
     }
 
-    // Busca anúncios só se não for histórico (modo=completo e sem mes)
-    if (!mes) {
+    await salvar('campanhas_mentoria', mn);
+    await salvar('campanhas_hub', hb);
+    await salvar('campanhas_experience', ex);
+
+    // Busca anúncios só se for 1 dia (cron diário)
+    if (!mes && desde === ate) {
       const fieldsAd = 'campaign_name,adset_name,ad_name,impressions,clicks,ctr,cpc,spend,actions,date_start';
       const urlAd = `${BASE}/${AD_ACCOUNT}/insights?fields=${fieldsAd}&time_range={"since":"${desde}","until":"${ate}"}&level=ad&time_increment=1&access_token=${TOKEN}&limit=500`;
       let anuncios = [];
@@ -83,6 +95,7 @@ export default async function handler(req, res) {
         anuncios = anuncios.concat(d.data || []);
         nextUrl = d.paging?.next || null;
       }
+      const amn = [], ahb = [], aex = [];
       for (const a of anuncios) {
         const plataforma = detectarPlataforma(a.campaign_name);
         if (plataforma === 'desconhecido') continue;
@@ -90,13 +103,16 @@ export default async function handler(req, res) {
         const vendas = extrairVendas(a.actions);
         const gasto = parseFloat(a.spend || 0);
         const reg = { data: a.date_start||desde, campanha_nome: a.campaign_name, conjunto_nome: a.adset_name, anuncio_nome: a.ad_name, impressoes: parseInt(a.impressions||0), cliques: parseInt(a.clicks||0), ctr: parseFloat(a.ctr||0), cpc: parseFloat(a.cpc||0), gasto };
-        if (plataforma === 'mentoria') await supabase.from('anuncios_mentoria').upsert({ ...reg, leads, cpl: leads>0?gasto/leads:0 }, { onConflict: 'data,anuncio_nome' });
-        else if (plataforma === 'hub') await supabase.from('anuncios_hub').upsert({ ...reg, leads, cpl: leads>0?gasto/leads:0 }, { onConflict: 'data,anuncio_nome' });
-        else if (plataforma === 'experience') await supabase.from('anuncios_experience').upsert({ ...reg, vendas, custo_por_compra: vendas>0?gasto/vendas:0 }, { onConflict: 'data,anuncio_nome' });
+        if (plataforma === 'mentoria') amn.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
+        else if (plataforma === 'hub') ahb.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
+        else if (plataforma === 'experience') aex.push({ ...reg, vendas, custo_por_compra: vendas>0?gasto/vendas:0 });
       }
+      await salvar('anuncios_mentoria', amn);
+      await salvar('anuncios_hub', ahb);
+      await salvar('anuncios_experience', aex);
     }
 
-    return res.status(200).json({ success: true, periodo: `${desde} → ${ate}`, total: campanhas.length, salvos });
+    return res.status(200).json({ success: true, periodo: `${desde} → ${ate}`, total: campanhas.length, salvos: { mn: mn.length, hb: hb.length, ex: ex.length } });
 
   } catch (err) {
     console.error('Erro meta-ads:', err);
