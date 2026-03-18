@@ -6,18 +6,16 @@ function detectarCanal(tag) {
   const t = tag.toLowerCase();
   if (t.includes('lp 1 site') || t.includes('lp1')) return 'Landing Page';
   if (t.includes('formulárioresp') || t.includes('formularioresp')) return 'Respondi';
-  if (t.includes('instagram') || t.includes('tráfego') || t.includes('trafego')) return 'Typebot';
+  if (t.includes('instagram') || t.includes('tráfeg') || t.includes('trafeg')) return 'Typebot';
   if (t.includes('site')) return 'Site Oficial';
   return 'Orgânico';
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
   try {
     const body = req.body;
     const canal = detectarCanal(body.contact_tag);
-
     const lead = {
       contact_name: body.contact_name || '',
       contact_email: body.contact_email || '',
@@ -30,9 +28,7 @@ export default async function handler(req, res) {
       momento: body.momento || '',
       canal
     };
-
     const scoreData = await scoreLead(lead);
-
     const { error } = await supabase.from('leads_mentoria').insert({
       ...lead,
       score: scoreData.score,
@@ -40,9 +36,7 @@ export default async function handler(req, res) {
       resumo: scoreData.resumo,
       proxima_acao: scoreData.proxima_acao
     });
-
     if (error) throw error;
-
     return res.status(200).json({ success: true, score: scoreData.score, classificacao: scoreData.classificacao });
   } catch (err) {
     console.error('Erro webhook-clint:', err);
