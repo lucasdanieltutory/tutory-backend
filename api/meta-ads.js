@@ -3,16 +3,32 @@ import { supabase } from '../lib/supabase.js';
 
 async function salvar(tabela, registros) {
   if (registros.length === 0) return;
-  // Deleta os registros existentes para o período e insere novamente
   const datas = [...new Set(registros.map(r => r.data))];
   for (const data of datas) {
     await supabase.from(tabela).delete().eq('data', data);
   }
-  // Insere em lotes de 50
   for (let i = 0; i < registros.length; i += 50) {
     const lote = registros.slice(i, i + 50);
     const { error } = await supabase.from(tabela).insert(lote);
     if (error) console.error(`Erro ao inserir em ${tabela}:`, error.message);
+  }
+}
+
+// Busca thumbnails dos anúncios ativos
+async function getThumbnails(BASE, AD_ACCOUNT, TOKEN) {
+  try {
+    const url = `${BASE}/${AD_ACCOUNT}/ads?fields=id,creative{thumbnail_url,image_url}&effective_status=["ACTIVE","PAUSED"]&access_token=${TOKEN}&limit=500`;
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.error) { console.log('[meta-ads] Erro thumbnails:', d.error.message); return {}; }
+    const map = {};
+    for (const ad of (d.data || [])) {
+      map[ad.id] = ad.creative?.thumbnail_url || ad.creative?.image_url || null;
+    }
+    return map;
+  } catch (e) {
+    console.log('[meta-ads] Falha thumbnails (nao critico):', e.message);
+    return {};
   }
 }
 
@@ -36,7 +52,6 @@ export default async function handler(req, res) {
         ate = ontem.toISOString().split('T')[0];
       }
     } else {
-      // Suporta desde/ate direto
       const ontem = new Date(Date.now()-86400000);
       desde = req.query?.desde || ontem.toISOString().split('T')[0];
       ate   = req.query?.ate   || req.query?.desde || ontem.toISOString().split('T')[0];
@@ -84,7 +99,10 @@ export default async function handler(req, res) {
 
     // Busca anúncios só se for 1 dia (cron diário)
     if (!mes && desde === ate) {
-      const fieldsAd = 'campaign_name,adset_name,ad_name,impressions,clicks,ctr,cpc,spend,actions,date_start';
+      // ── NOVO: busca thumbnails primeiro ──
+      const thumbMap = await getThumbnails(BASE, AD_ACCOUNT, TOKEN);
+
+      const fieldsAd = 'ad_id,campaign_name,adset_name,ad_name,impressions,clicks,ctr,cpc,spend,actions,date_start';
       const urlAd = `${BASE}/${AD_ACCOUNT}/insights?fields=${fieldsAd}&time_range={"since":"${desde}","until":"${ate}"}&level=ad&time_increment=1&access_token=${TOKEN}&limit=500`;
       let anuncios = [];
       nextUrl = urlAd;
@@ -102,7 +120,20 @@ export default async function handler(req, res) {
         const leads = extrairLeads(a.actions);
         const vendas = extrairVendas(a.actions);
         const gasto = parseFloat(a.spend || 0);
-        const reg = { data: a.date_start||desde, campanha_nome: a.campaign_name, conjunto_nome: a.adset_name, anuncio_nome: a.ad_name, impressoes: parseInt(a.impressions||0), cliques: parseInt(a.clicks||0), ctr: parseFloat(a.ctr||0), cpc: parseFloat(a.cpc||0), gasto };
+        const reg = {
+          data: a.date_start||desde,
+          campanha_nome: a.campaign_name,
+          conjunto_nome: a.adset_name,
+          anuncio_nome: a.ad_name,
+          anuncio_id: a.ad_id || null,
+          impressoes: parseInt(a.impressions||0),
+          cliques: parseInt(a.clicks||0),
+          ctr: parseFloat(a.ctr||0),
+          cpc: parseFloat(a.cpc||0),
+          gasto,
+          // ── NOVO: injeta thumbnail ──
+          thumbnail_url: thumbMap[a.ad_id] || null
+        };
         if (plataforma === 'mentoria') amn.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
         else if (plataforma === 'hub') ahb.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
         else if (plataforma === 'experience') aex.push({ ...reg, vendas, custo_por_compra: vendas>0?gasto/vendas:0 });
