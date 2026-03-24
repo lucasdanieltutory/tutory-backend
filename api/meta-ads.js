@@ -14,20 +14,26 @@ async function salvar(tabela, registros) {
   }
 }
 
-// Busca thumbnails dos anúncios ativos
+// Busca thumbnails dos anuncios ativos com logs para debug
 async function getThumbnails(BASE, AD_ACCOUNT, TOKEN) {
   try {
-    const url = `${BASE}/${AD_ACCOUNT}/ads?fields=id,creative{thumbnail_url,image_url}&effective_status=["ACTIVE","PAUSED"]&access_token=${TOKEN}&limit=500`;
+    const url = `${BASE}/${AD_ACCOUNT}/ads?fields=id,name,creative{id,thumbnail_url,image_url,picture}&effective_status=["ACTIVE","PAUSED","ARCHIVED"]&access_token=${TOKEN}&limit=500`;
     const r = await fetch(url);
     const d = await r.json();
     if (d.error) { console.log('[meta-ads] Erro thumbnails:', d.error.message); return {}; }
+    const ads = d.data || [];
+    console.log(`[meta-ads] Anuncios para thumbnail: ${ads.length}`);
     const map = {};
-    for (const ad of (d.data || [])) {
-      map[ad.id] = ad.creative?.thumbnail_url || ad.creative?.image_url || null;
+    for (const ad of ads) {
+      const thumb = ad.creative?.thumbnail_url || ad.creative?.picture || ad.creative?.image_url || null;
+      map[ad.id] = thumb;
+      if (!thumb) console.log(`[meta-ads] Sem thumb: ${ad.name} creative=${JSON.stringify(ad.creative)}`);
     }
+    const comThumb = Object.values(map).filter(Boolean).length;
+    console.log(`[meta-ads] Thumbnails encontradas: ${comThumb}/${ads.length}`);
     return map;
   } catch (e) {
-    console.log('[meta-ads] Falha thumbnails (nao critico):', e.message);
+    console.log('[meta-ads] Falha thumbnails:', e.message);
     return {};
   }
 }
@@ -97,9 +103,8 @@ export default async function handler(req, res) {
     await salvar('campanhas_hub', hb);
     await salvar('campanhas_experience', ex);
 
-    // Busca anúncios só se for 1 dia (cron diário)
-    if (true) { // busca anuncios sempre
-      // ── NOVO: busca thumbnails primeiro ──
+    // Busca anuncios e thumbnails para qualquer periodo
+    {
       const thumbMap = await getThumbnails(BASE, AD_ACCOUNT, TOKEN);
 
       const fieldsAd = 'ad_id,campaign_name,adset_name,ad_name,impressions,clicks,ctr,cpc,spend,actions,date_start';
@@ -113,6 +118,10 @@ export default async function handler(req, res) {
         anuncios = anuncios.concat(d.data || []);
         nextUrl = d.paging?.next || null;
       }
+
+      console.log(`[meta-ads] Anuncios nos insights: ${anuncios.length}`);
+      console.log(`[meta-ads] Exemplo ad_id: ${anuncios[0]?.ad_id} thumbMap keys: ${Object.keys(thumbMap).slice(0,3).join(',')}`);
+
       const amn = [], ahb = [], aex = [];
       for (const a of anuncios) {
         const plataforma = detectarPlataforma(a.campaign_name);
@@ -131,7 +140,6 @@ export default async function handler(req, res) {
           ctr: parseFloat(a.ctr||0),
           cpc: parseFloat(a.cpc||0),
           gasto,
-          // ── NOVO: injeta thumbnail ──
           thumbnail_url: thumbMap[a.ad_id] || null
         };
         if (plataforma === 'mentoria') amn.push({ ...reg, leads, cpl: leads>0?gasto/leads:0 });
