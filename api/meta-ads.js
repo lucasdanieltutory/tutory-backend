@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     await salvar('campanhas_experience', ex);
 
     // Busca anúncios só se for 1 dia (cron diário)
-    if (!mes && desde === ate) {
+    if (true) { // busca anuncios sempre
       // ── NOVO: busca thumbnails primeiro ──
       const thumbMap = await getThumbnails(BASE, AD_ACCOUNT, TOKEN);
 
