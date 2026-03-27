@@ -14,10 +14,10 @@ async function salvar(tabela, registros) {
   }
 }
 
-// Busca thumbnails dos anuncios ativos com logs para debug
+// Busca thumbnails SEM filtro de effective_status
 async function getThumbnails(BASE, AD_ACCOUNT, TOKEN) {
   try {
-    const url = `${BASE}/${AD_ACCOUNT}/ads?fields=id,name,creative{id,thumbnail_url,image_url,picture}&effective_status=["ACTIVE","PAUSED","ARCHIVED"]&access_token=${TOKEN}&limit=500`;
+    const url = `${BASE}/${AD_ACCOUNT}/ads?fields=id,name,creative{thumbnail_url}&limit=500&access_token=${TOKEN}`;
     const r = await fetch(url);
     const d = await r.json();
     if (d.error) { console.log('[meta-ads] Erro thumbnails:', d.error.message); return {}; }
@@ -25,9 +25,8 @@ async function getThumbnails(BASE, AD_ACCOUNT, TOKEN) {
     console.log(`[meta-ads] Anuncios para thumbnail: ${ads.length}`);
     const map = {};
     for (const ad of ads) {
-      const thumb = ad.creative?.thumbnail_url || ad.creative?.picture || ad.creative?.image_url || null;
+      const thumb = ad.creative?.thumbnail_url || null;
       map[ad.id] = thumb;
-      if (!thumb) console.log(`[meta-ads] Sem thumb: ${ad.name} creative=${JSON.stringify(ad.creative)}`);
     }
     const comThumb = Object.values(map).filter(Boolean).length;
     console.log(`[meta-ads] Thumbnails encontradas: ${comThumb}/${ads.length}`);
@@ -120,7 +119,7 @@ export default async function handler(req, res) {
       }
 
       console.log(`[meta-ads] Anuncios nos insights: ${anuncios.length}`);
-      console.log(`[meta-ads] Exemplo ad_id: ${anuncios[0]?.ad_id} thumbMap keys: ${Object.keys(thumbMap).slice(0,3).join(',')}`);
+      console.log(`[meta-ads] Thumbnails no map: ${Object.keys(thumbMap).length}`);
 
       const amn = [], ahb = [], aex = [];
       for (const a of anuncios) {
